@@ -3,8 +3,7 @@
 <head>
     <script src="https://cdn.jsdelivr.net/npm/phaser@3.60.0/dist/phaser-arcade-physics.min.js"></script>
     <style>
-        body { margin: 0; background: #02060c; overflow: hidden; font-family: 'Courier New', Courier, monospace; }
-        canvas { box-shadow: inset 0 0 100px rgba(0,255,255,0.2); }
+        body { margin: 0; background: #010a14; overflow: hidden; font-family: 'Arial', sans-serif; }
     </style>
 </head>
 <body>
@@ -14,109 +13,111 @@
             width: window.innerWidth,
             height: window.innerHeight,
             physics: { default: 'arcade', arcade: { gravity: { y: 0 } } },
-            scene: { create: create, update: update }
+            scene: { preload: preload, create: create, update: update }
         };
 
-        let player, food, score, levelText, cursors, particles;
+        let player, food, enemies, score, levelText, cursors;
+
+        function preload() {}
 
         function create() {
             score = parseInt(localStorage.getItem('playerScore')) || 1;
 
-            // 1. REALISTIC BACKGROUND (Vignette & Grid)
-            this.add.grid(window.innerWidth/2, window.innerHeight/2, window.innerWidth*4, window.innerHeight*4, 80, 80, 0x000000, 0, 0x00f2ff, 0.05);
-            
-            // 2. PARTICLE SYSTEM (Makes it look like fluid/water)
-            particles = this.add.particles(0, 0, 'player', {
-                speed: 10,
-                scale: { start: 0.2, end: 0 },
-                alpha: { start: 0.5, end: 0 },
-                blendMode: 'ADD',
-                follow: player
-            });
+            // 1. DEEP SEA BACKGROUND
+            this.add.grid(window.innerWidth/2, window.innerHeight/2, window.innerWidth*4, window.innerHeight*4, 100, 100, 0x000000, 0, 0x004466, 0.2);
 
-            // 3. GENERATE TEXTURES WITH GLOW
-            const pGraphics = this.make.graphics().fillStyle(0xffffff).fillCircle(20, 20, 20);
-            pGraphics.generateTexture('player', 40, 40);
-            
-            const fGraphics = this.make.graphics().fillStyle(0x00ffcc).fillCircle(8, 8, 8);
-            fGraphics.generateTexture('food', 16, 16);
+            // 2. TEXTURES
+            const pG = this.make.graphics().fillStyle(0xffffff).fillCircle(20, 20, 20);
+            pG.generateTexture('cell', 40, 40);
+            const fG = this.make.graphics().fillStyle(0x00ffaa).fillCircle(5, 5, 5);
+            fG.generateTexture('plankton', 10, 10);
 
-            // 4. PLAYER SETTINGS
-            player = this.physics.add.sprite(window.innerWidth/2, window.innerHeight/2, 'player');
-            player.setCollideWorldBounds(true);
-            player.setDamping(true).setDrag(0.15); // Fluid movement
-            particles.startFollow(player);
+            // 3. PLAYER SETUP
+            player = this.physics.add.sprite(window.innerWidth/2, window.innerHeight/2, 'cell');
+            player.setCollideWorldBounds(true).setDamping(true).setDrag(0.1);
 
-            // 5. FOOD GROUP
+            // 4. GROUPS
             food = this.physics.add.group();
-            for(let i = 0; i < 30; i++) { spawnFood(food); }
+            enemies = this.physics.add.group();
 
-            // 6. UI PROMOTIONS
-            levelText = this.add.text(30, 30, '', { 
-                fontSize: '28px', 
-                fontStyle: 'bold', 
-                stroke: '#000', 
-                strokeThickness: 4 
-            });
-            
-            updateVisuals(player, levelText, score, this);
+            for(let i = 0; i < 40; i++) { spawnFood(); }
+            for(let i = 0; i < 5; i++) { spawnEnemy(this); }
 
-            // 7. COLLISION & PROMOTION LOGIC
+            // 5. UI
+            levelText = this.add.text(30, 30, '', { fontSize: '26px', fontStyle: 'bold', fill: '#00f2ff' });
+            updateEvolution();
+
+            // 6. OVERLAPS (PREDATION)
             this.physics.add.overlap(player, food, (p, f) => {
                 f.destroy();
-                score++;
-                localStorage.setItem('playerScore', score);
-                spawnFood(food);
-                
-                // Promotion Flash Effect
-                this.cameras.main.flash(200, 0, 255, 255, 0.1);
-                updateVisuals(p, levelText, score, this);
+                score += 1;
+                spawnFood();
+                updateEvolution();
+            });
+
+            this.physics.add.overlap(player, enemies, (p, e) => {
+                // PREDATION LOGIC: If you are bigger, you eat them. If not, they "bite" you.
+                if (score > e.getData('lvl')) {
+                    score += 10;
+                    e.destroy();
+                    spawnEnemy(this);
+                    this.cameras.main.shake(100, 0.01);
+                    updateEvolution();
+                } else {
+                    score = Math.max(1, score - 5);
+                    p.x -= 50; // Knockback
+                    updateEvolution();
+                }
             });
 
             cursors = this.input.keyboard.createCursorKeys();
         }
 
-        function updateVisuals(p, txt, s, scene) {
-            // Smooth Scaling
-            p.setScale(1 + (s * 0.05));
-            
-            let species = "PROTOZOA";
-            let color = 0x00ff88; // Default Neon Green
-
-            // PROMOTION LEVELS
-            if(s > 15) { species = "AMOEBA"; color = 0x00d9ff; }
-            if(s > 40) { species = "JELLYFISH"; color = 0xbc00ff; }
-            if(s > 80) { species = "NEON SQUID"; color = 0xff0066; }
-            if(s > 150) { species = "COSMIC ENTITY"; color = 0xffffff; }
-
-            txt.setText(`CLASSIFICATION: ${species}\nSTRENGTH: ${s}`);
-            p.setTint(color);
-            txt.setFill('#' + color.toString(16).padStart(6, '0'));
-            
-            // Add a glow effect to the text
-            txt.setShadow(2, 2, '#' + color.toString(16).padStart(6, '0'), 10);
+        function spawnFood() {
+            food.create(Phaser.Math.Between(50, window.innerWidth-50), Phaser.Math.Between(50, window.innerHeight-50), 'plankton');
         }
 
-        function spawnFood(group) {
-            let x = Phaser.Math.Between(50, window.innerWidth-50);
-            let y = Phaser.Math.Between(50, window.innerHeight-50);
-            let f = group.create(x, y, 'food');
-            f.setAlpha(0.7);
+        function spawnEnemy(scene) {
+            let x = Phaser.Math.Between(0, window.innerWidth);
+            let y = Phaser.Math.Between(0, window.innerHeight);
+            let enemy = enemies.create(x, y, 'cell');
+            let eLvl = Phaser.Math.Between(score - 10, score + 20);
+            enemy.setData('lvl', eLvl);
+            enemy.setScale(1 + (eLvl * 0.03));
+            enemy.setTint(0xff3333); // Red for predators
+            enemy.setVelocity(Phaser.Math.Between(-100, 100), Phaser.Math.Between(-100, 100));
+            enemy.setBounce(1).setCollideWorldBounds(true);
+        }
+
+        function updateEvolution() {
+            localStorage.setItem('playerScore', score);
+            player.setScale(1 + (score * 0.03));
+            
+            let name = "Microbe";
+            let color = 0x00ff88;
+
+            if(score > 20) { name = "Complex Cell"; color = 0x00d9ff; }
+            if(score > 50) { name = "Small Crustacean"; color = 0xaa00ff; }
+            if(score > 150) { name = "Hunter Fish"; color = 0xffa500; }
+            if(score > 300) { name = "Apex Leviathan"; color = 0xff0000; }
+
+            levelText.setText(`EVOLUTION: ${name}\nGENETIC MASS: ${score}`);
+            player.setTint(color);
         }
 
         function update() {
-            const power = 900;
-            if (cursors.left.isDown) player.setAccelerationX(-power);
-            else if (cursors.right.isDown) player.setAccelerationX(power);
+            const speed = 800;
+            if (cursors.left.isDown) player.setAccelerationX(-speed);
+            else if (cursors.right.isDown) player.setAccelerationX(speed);
             else player.setAccelerationX(0);
 
-            if (cursors.up.isDown) player.setAccelerationY(-power);
-            else if (cursors.down.isDown) player.setAccelerationY(power);
+            if (cursors.up.isDown) player.setAccelerationY(-speed);
+            else if (cursors.down.isDown) player.setAccelerationY(speed);
             else player.setAccelerationY(0);
 
-            // Rotate player toward movement direction for "realism"
-            if (player.body.velocity.x !== 0 || player.body.velocity.y !== 0) {
-                player.rotation = Math.atan2(player.body.velocity.y, player.body.velocity.x);
+            // Rotate smoothly toward movement
+            if (player.body.velocity.x !== 0) {
+                player.rotation = Phaser.Math.Angle.Between(0, 0, player.body.velocity.x, player.body.velocity.y);
             }
         }
 
