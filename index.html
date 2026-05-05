@@ -3,7 +3,8 @@
 <head>
     <script src="https://cdn.jsdelivr.net/npm/phaser@3.60.0/dist/phaser-arcade-physics.min.js"></script>
     <style>
-        body { margin: 0; background: #0a192f; overflow: hidden; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        body { margin: 0; background: #02060c; overflow: hidden; font-family: 'Courier New', Courier, monospace; }
+        canvas { box-shadow: inset 0 0 100px rgba(0,255,255,0.2); }
     </style>
 </head>
 <body>
@@ -12,83 +13,111 @@
             type: Phaser.AUTO,
             width: window.innerWidth,
             height: window.innerHeight,
-            physics: { 
-                default: 'arcade',
-                arcade: { gravity: { y: 0 }, debug: false }
-            },
+            physics: { default: 'arcade', arcade: { gravity: { y: 0 } } },
             scene: { create: create, update: update }
         };
 
-        let player, food, score, levelText, cursors;
+        let player, food, score, levelText, cursors, particles;
 
         function create() {
-            // 1. LOAD SAVED PROGRESS (The "Login" Quick-Fix)
             score = parseInt(localStorage.getItem('playerScore')) || 1;
 
-            // 2. BIOLOGICAL GRID BACKGROUND
-            this.add.grid(window.innerWidth/2, window.innerHeight/2, window.innerWidth*2, window.innerHeight*2, 60, 60, 0x000000, 0, 0x3e4a59, 0.3);
+            // 1. REALISTIC BACKGROUND (Vignette & Grid)
+            this.add.grid(window.innerWidth/2, window.innerHeight/2, window.innerWidth*4, window.innerHeight*4, 80, 80, 0x000000, 0, 0x00f2ff, 0.05);
+            
+            // 2. PARTICLE SYSTEM (Makes it look like fluid/water)
+            particles = this.add.particles(0, 0, 'player', {
+                speed: 10,
+                scale: { start: 0.2, end: 0 },
+                alpha: { start: 0.5, end: 0 },
+                blendMode: 'ADD',
+                follow: player
+            });
 
-            // 3. GENERATE TEXTURES
+            // 3. GENERATE TEXTURES WITH GLOW
             const pGraphics = this.make.graphics().fillStyle(0xffffff).fillCircle(20, 20, 20);
             pGraphics.generateTexture('player', 40, 40);
-            const fGraphics = this.make.graphics().fillStyle(0xff3333).fillCircle(10, 10, 8);
-            fGraphics.generateTexture('food', 20, 20);
+            
+            const fGraphics = this.make.graphics().fillStyle(0x00ffcc).fillCircle(8, 8, 8);
+            fGraphics.generateTexture('food', 16, 16);
 
-            // 4. PLAYER WITH PHYSICS
+            // 4. PLAYER SETTINGS
             player = this.physics.add.sprite(window.innerWidth/2, window.innerHeight/2, 'player');
             player.setCollideWorldBounds(true);
-            player.setDamping(true);
-            player.setDrag(0.1); // This makes the "gliding" effect
-            player.setMaxVelocity(400);
+            player.setDamping(true).setDrag(0.15); // Fluid movement
+            particles.startFollow(player);
 
             // 5. FOOD GROUP
             food = this.physics.add.group();
-            for(let i = 0; i < 25; i++) { spawnFood(food); }
+            for(let i = 0; i < 30; i++) { spawnFood(food); }
 
-            // 6. UI
-            levelText = this.add.text(25, 25, '', { fontSize: '24px', fontStyle: 'bold', fill: '#00ff00' });
-            updateEvolution(player, levelText, score);
+            // 6. UI PROMOTIONS
+            levelText = this.add.text(30, 30, '', { 
+                fontSize: '28px', 
+                fontStyle: 'bold', 
+                stroke: '#000', 
+                strokeThickness: 4 
+            });
+            
+            updateVisuals(player, levelText, score, this);
 
-            // 7. INTERACTION
+            // 7. COLLISION & PROMOTION LOGIC
             this.physics.add.overlap(player, food, (p, f) => {
                 f.destroy();
                 score++;
-                localStorage.setItem('playerScore', score); // Saves progress to browser
+                localStorage.setItem('playerScore', score);
                 spawnFood(food);
-                updateEvolution(p, levelText, score);
+                
+                // Promotion Flash Effect
+                this.cameras.main.flash(200, 0, 255, 255, 0.1);
+                updateVisuals(p, levelText, score, this);
             });
 
             cursors = this.input.keyboard.createCursorKeys();
         }
 
-        function updateEvolution(p, txt, s) {
-            p.setScale(1 + (s * 0.04));
-            let species = "BACTERIA";
-            let color = 0x00ff00;
+        function updateVisuals(p, txt, s, scene) {
+            // Smooth Scaling
+            p.setScale(1 + (s * 0.05));
+            
+            let species = "PROTOZOA";
+            let color = 0x00ff88; // Default Neon Green
 
-            if(s > 10) { species = "AMOEBA"; color = 0x00ffff; }
-            if(s > 30) { species = "JELLYFISH"; color = 0xff00ff; }
-            if(s > 60) { species = "SMALL FISH"; color = 0xffa500; }
-            if(s > 100) { species = "APEX PREDATOR"; color = 0xff0000; }
+            // PROMOTION LEVELS
+            if(s > 15) { species = "AMOEBA"; color = 0x00d9ff; }
+            if(s > 40) { species = "JELLYFISH"; color = 0xbc00ff; }
+            if(s > 80) { species = "NEON SQUID"; color = 0xff0066; }
+            if(s > 150) { species = "COSMIC ENTITY"; color = 0xffffff; }
 
-            txt.setText(`SPECIES: ${species} | LEVEL: ${s}`);
+            txt.setText(`CLASSIFICATION: ${species}\nSTRENGTH: ${s}`);
             p.setTint(color);
             txt.setFill('#' + color.toString(16).padStart(6, '0'));
+            
+            // Add a glow effect to the text
+            txt.setShadow(2, 2, '#' + color.toString(16).padStart(6, '0'), 10);
         }
 
         function spawnFood(group) {
-            group.create(Phaser.Math.Between(50, window.innerWidth-50), Phaser.Math.Between(50, window.innerHeight-50), 'food');
+            let x = Phaser.Math.Between(50, window.innerWidth-50);
+            let y = Phaser.Math.Between(50, window.innerHeight-50);
+            let f = group.create(x, y, 'food');
+            f.setAlpha(0.7);
         }
 
         function update() {
-            const accel = 800; 
-            if (cursors.left.isDown) player.setAccelerationX(-accel);
-            else if (cursors.right.isDown) player.setAccelerationX(accel);
+            const power = 900;
+            if (cursors.left.isDown) player.setAccelerationX(-power);
+            else if (cursors.right.isDown) player.setAccelerationX(power);
             else player.setAccelerationX(0);
 
-            if (cursors.up.isDown) player.setAccelerationY(-accel);
-            else if (cursors.down.isDown) player.setAccelerationY(accel);
+            if (cursors.up.isDown) player.setAccelerationY(-power);
+            else if (cursors.down.isDown) player.setAccelerationY(power);
             else player.setAccelerationY(0);
+
+            // Rotate player toward movement direction for "realism"
+            if (player.body.velocity.x !== 0 || player.body.velocity.y !== 0) {
+                player.rotation = Math.atan2(player.body.velocity.y, player.body.velocity.x);
+            }
         }
 
         new Phaser.Game(config);
