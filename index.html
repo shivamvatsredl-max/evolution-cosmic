@@ -2,9 +2,7 @@
 <html>
 <head>
     <script src="https://cdn.jsdelivr.net/npm/phaser@3.60.0/dist/phaser-arcade-physics.min.js"></script>
-    <style>
-        body { margin: 0; background: #010a14; overflow: hidden; font-family: 'Arial', sans-serif; }
-    </style>
+    <style>body { margin: 0; background: #00050a; overflow: hidden; }</style>
 </head>
 <body>
     <script>
@@ -13,60 +11,61 @@
             width: window.innerWidth,
             height: window.innerHeight,
             physics: { default: 'arcade', arcade: { gravity: { y: 0 } } },
-            scene: { preload: preload, create: create, update: update }
+            scene: { create: create, update: update }
         };
 
-        let player, food, enemies, score, levelText, cursors;
-
-        function preload() {}
+        let player, food, enemies, score, levelText, cursors, bg;
 
         function create() {
             score = parseInt(localStorage.getItem('playerScore')) || 1;
 
-            // 1. DEEP SEA BACKGROUND
-            this.add.grid(window.innerWidth/2, window.innerHeight/2, window.innerWidth*4, window.innerHeight*4, 100, 100, 0x000000, 0, 0x004466, 0.2);
+            // 1. CREATE A HUGE WORLD (4000x4000 pixels)
+            this.physics.world.setBounds(0, 0, 4000, 4000);
 
-            // 2. TEXTURES
+            // 2. BIOLOGICAL BACKGROUND
+            bg = this.add.grid(2000, 2000, 4000, 4000, 100, 100, 0x000000, 0, 0x00d9ff, 0.1);
+
+            // 3. GENERATE TEXTURES
             const pG = this.make.graphics().fillStyle(0xffffff).fillCircle(20, 20, 20);
-            pG.generateTexture('cell', 40, 40);
-            const fG = this.make.graphics().fillStyle(0x00ffaa).fillCircle(5, 5, 5);
-            fG.generateTexture('plankton', 10, 10);
+            pG.generateTexture('body', 40, 40);
+            const fG = this.make.graphics().fillStyle(0x00ffcc).fillCircle(5, 5, 5);
+            fG.generateTexture('food', 10, 10);
 
-            // 3. PLAYER SETUP
-            player = this.physics.add.sprite(window.innerWidth/2, window.innerHeight/2, 'cell');
+            // 4. PLAYER SETUP
+            player = this.physics.add.sprite(2000, 2000, 'body');
             player.setCollideWorldBounds(true).setDamping(true).setDrag(0.1);
 
-            // 4. GROUPS
+            // 5. CAMERA SYSTEM (Moves with player)
+            this.cameras.main.startFollow(player, true, 0.1, 0.1);
+            this.cameras.main.setZoom(1);
+
+            // 6. GROUPS
             food = this.physics.add.group();
             enemies = this.physics.add.group();
+            for(let i = 0; i < 200; i++) { spawnFood(); }
+            for(let i = 0; i < 15; i++) { spawnEnemy(this); }
 
-            for(let i = 0; i < 40; i++) { spawnFood(); }
-            for(let i = 0; i < 5; i++) { spawnEnemy(this); }
-
-            // 5. UI
-            levelText = this.add.text(30, 30, '', { fontSize: '26px', fontStyle: 'bold', fill: '#00f2ff' });
+            // 7. UI (Fixed to screen)
+            levelText = this.add.text(30, 30, '', { fontSize: '28px', fontStyle: 'bold', fill: '#00f2ff' }).setScrollFactor(0);
             updateEvolution();
 
-            // 6. OVERLAPS (PREDATION)
+            // 8. PREDATION
             this.physics.add.overlap(player, food, (p, f) => {
                 f.destroy();
-                score += 1;
+                score++;
                 spawnFood();
                 updateEvolution();
             });
 
             this.physics.add.overlap(player, enemies, (p, e) => {
-                // PREDATION LOGIC: If you are bigger, you eat them. If not, they "bite" you.
                 if (score > e.getData('lvl')) {
-                    score += 10;
+                    score += 15;
                     e.destroy();
                     spawnEnemy(this);
-                    this.cameras.main.shake(100, 0.01);
                     updateEvolution();
                 } else {
-                    score = Math.max(1, score - 5);
-                    p.x -= 50; // Knockback
-                    updateEvolution();
+                    score = Math.max(1, score - 2);
+                    this.cameras.main.shake(200, 0.005);
                 }
             });
 
@@ -74,39 +73,36 @@
         }
 
         function spawnFood() {
-            food.create(Phaser.Math.Between(50, window.innerWidth-50), Phaser.Math.Between(50, window.innerHeight-50), 'plankton');
+            food.create(Phaser.Math.Between(0, 4000), Phaser.Math.Between(0, 4000), 'food');
         }
 
         function spawnEnemy(scene) {
-            let x = Phaser.Math.Between(0, window.innerWidth);
-            let y = Phaser.Math.Between(0, window.innerHeight);
-            let enemy = enemies.create(x, y, 'cell');
-            let eLvl = Phaser.Math.Between(score - 10, score + 20);
-            enemy.setData('lvl', eLvl);
-            enemy.setScale(1 + (eLvl * 0.03));
-            enemy.setTint(0xff3333); // Red for predators
-            enemy.setVelocity(Phaser.Math.Between(-100, 100), Phaser.Math.Between(-100, 100));
-            enemy.setBounce(1).setCollideWorldBounds(true);
+            let enemy = enemies.create(Phaser.Math.Between(0, 4000), Phaser.Math.Between(0, 4000), 'body');
+            let eLvl = Phaser.Math.Between(score - 5, score + 30);
+            enemy.setData('lvl', eLvl).setScale(1 + (eLvl * 0.02)).setTint(0xff4444).setBounce(1).setCollideWorldBounds(true);
+            enemy.setVelocity(Phaser.Math.Between(-150, 150), Phaser.Math.Between(-150, 150));
         }
 
         function updateEvolution() {
             localStorage.setItem('playerScore', score);
-            player.setScale(1 + (score * 0.03));
+            player.setScale(1 + (score * 0.02));
             
-            let name = "Microbe";
+            // CAMERA ZOOM OUT as you grow so you can see more
+            let targetZoom = Math.max(0.3, 1 - (score * 0.002));
+            player.scene.cameras.main.setZoom(targetZoom);
+
+            let species = "Microbe";
             let color = 0x00ff88;
+            if(score > 30) { species = "Multi-Cellular"; color = 0x00d9ff; }
+            if(score > 80) { species = "Sea Slug"; color = 0xbc00ff; }
+            if(score > 200) { species = "Predatory Fish"; color = 0xffa500; }
 
-            if(score > 20) { name = "Complex Cell"; color = 0x00d9ff; }
-            if(score > 50) { name = "Small Crustacean"; color = 0xaa00ff; }
-            if(score > 150) { name = "Hunter Fish"; color = 0xffa500; }
-            if(score > 300) { name = "Apex Leviathan"; color = 0xff0000; }
-
-            levelText.setText(`EVOLUTION: ${name}\nGENETIC MASS: ${score}`);
+            levelText.setText(`EVOLUTION: ${species}\nMASS: ${score}`);
             player.setTint(color);
         }
 
-        function update() {
-            const speed = 800;
+        function update(time) {
+            const speed = 1000;
             if (cursors.left.isDown) player.setAccelerationX(-speed);
             else if (cursors.right.isDown) player.setAccelerationX(speed);
             else player.setAccelerationX(0);
@@ -115,9 +111,13 @@
             else if (cursors.down.isDown) player.setAccelerationY(speed);
             else player.setAccelerationY(0);
 
-            // Rotate smoothly toward movement
+            // ANIMATED "PULSING" MOVEMENT
+            let pulse = 1 + Math.sin(time / 200) * 0.1;
+            player.setScale(player.scaleX * 0.99 + (1 + (score * 0.02)) * 0.01 * pulse);
+
+            // Face movement direction
             if (player.body.velocity.x !== 0) {
-                player.rotation = Phaser.Math.Angle.Between(0, 0, player.body.velocity.x, player.body.velocity.y);
+                player.rotation = Math.atan2(player.body.velocity.y, player.body.velocity.x);
             }
         }
 
