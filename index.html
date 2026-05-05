@@ -18,10 +18,32 @@
         let score = 1; 
         let levelText;
 
-        function preload() {
-            // These are temporary shapes. You can replace these with your Bacteria/Alien images later.
-            this.load.image('playerImg', 'https://labs.phaser.io/assets/sprites/asuna_by_be_honkas.png'); 
-            this.load.image('foodImg', 'https://labs.phaser.io/assets/sprites/tiny_coin.png');
+       function preload() {
+            // We are creating graphics instead of loading broken links
+        }
+
+        function create() {
+            // Create a Green Circle for the Player
+            let playerGraphics = this.make.graphics().fillStyle(0x00ff00).fillCircle(50, 50, 50);
+            playerGraphics.generateTexture('playerImg', 100, 100);
+            
+            // Create a Red Square for the Food
+            let foodGraphics = this.make.graphics().fillStyle(0xff0000).fillRect(0, 0, 20, 20);
+            foodGraphics.generateTexture('foodImg', 20, 20);
+
+            // Now the rest of your code works!
+            player = this.physics.add.sprite(400, 300, 'playerImg').setScale(0.2);
+            player.setCollideWorldBounds(true);
+
+            food = this.physics.add.group({
+                key: 'foodImg',
+                repeat: 15,
+                setXY: { x: 50, y: 50, stepX: 100 }
+            });
+
+            levelText = this.add.text(20, 20, 'Level: 1 (Bacteria)', { fontSize: '28px', fill: '#0f0' });
+            this.physics.add.overlap(player, food, eatFood, null, this);
+            this.cursors = this.input.keyboard.createCursorKeys();
         }
 
         function create() {
