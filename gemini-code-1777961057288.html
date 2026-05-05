@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <script src="https://cdn.jsdelivr.net/npm/phaser@3.60.0/dist/phaser-arcade-physics.min.js"></script>
+</head>
+<body style="margin: 0; background: #000; overflow: hidden;">
+    <script>
+        const config = {
+            type: Phaser.AUTO,
+            width: window.innerWidth,
+            height: window.innerHeight,
+            physics: { default: 'arcade' },
+            scene: { preload: preload, create: create, update: update }
+        };
+
+        let player;
+        let food;
+        let score = 1; 
+        let levelText;
+
+        function preload() {
+            // These are temporary shapes. You can replace these with your Bacteria/Alien images later.
+            this.load.image('playerImg', 'https://labs.phaser.io/assets/sprites/asuna_by_be_honkas.png'); 
+            this.load.image('foodImg', 'https://labs.phaser.io/assets/sprites/tiny_coin.png');
+        }
+
+        function create() {
+            player = this.physics.add.sprite(400, 300, 'playerImg').setScale(0.1);
+            player.setCollideWorldBounds(true);
+
+            food = this.physics.add.group({
+                key: 'foodImg',
+                repeat: 15,
+                setXY: { x: 50, y: 50, stepX: 100 }
+            });
+
+            levelText = this.add.text(20, 20, 'Level: 1 (Bacteria)', { fontSize: '28px', fill: '#0f0' });
+            this.physics.add.overlap(player, food, eatFood, null, this);
+            this.cursors = this.input.keyboard.createCursorKeys();
+        }
+
+        function update() {
+            player.setVelocity(0);
+            if (this.cursors.left.isDown) player.setVelocityX(-250);
+            else if (this.cursors.right.isDown) player.setVelocityX(250);
+            if (this.cursors.up.isDown) player.setVelocityY(-250);
+            else if (this.cursors.down.isDown) player.setVelocityY(250);
+        }
+
+        function eatFood(player, targetFood) {
+            targetFood.disableBody(true, true);
+            score += 1;
+            
+            // Logic for the 1,000 levels
+            let species = "Bacteria";
+            if(score >= 100) species = "Earthworm";
+            if(score >= 300) species = "Tortoise";
+            if(score >= 1000) species = "Cosmic God";
+
+            levelText.setText('Level: ' + score + ' (' + species + ')');
+            
+            // Smooth Growth Animation
+            this.tweens.add({
+                targets: player,
+                scale: 0.1 + (score * 0.002),
+                duration: 150
+            });
+
+            // Respawn food
+            let x = Phaser.Math.Between(50, window.innerWidth - 50);
+            let y = Phaser.Math.Between(50, window.innerHeight - 50);
+            food.create(x, y, 'foodImg');
+        }
+
+        const game = new Phaser.Game(config);
+    </script>
+</body>
+</html>
