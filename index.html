@@ -2,7 +2,9 @@
 <html>
 <head>
     <script src="https://cdn.jsdelivr.net/npm/phaser@3.60.0/dist/phaser-arcade-physics.min.js"></script>
-    <style>body { margin: 0; background: #222; overflow: hidden; }</style>
+    <style>
+        body { margin: 0; background: #0a192f; overflow: hidden; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+    </style>
 </head>
 <body>
     <script>
@@ -10,63 +12,83 @@
             type: Phaser.AUTO,
             width: window.innerWidth,
             height: window.innerHeight,
-            physics: { default: 'arcade' },
+            physics: { 
+                default: 'arcade',
+                arcade: { gravity: { y: 0 }, debug: false }
+            },
             scene: { create: create, update: update }
         };
 
-        let player;
-        let food;
-        let score = 1;
-        let levelText;
-        let cursors;
+        let player, food, score, levelText, cursors;
 
         function create() {
-            // Create Graphics for the Player (Green Circle)
-            const pGraphics = this.make.graphics().fillStyle(0x00ff00).fillCircle(20, 20, 20);
+            // 1. LOAD SAVED PROGRESS (The "Login" Quick-Fix)
+            score = parseInt(localStorage.getItem('playerScore')) || 1;
+
+            // 2. BIOLOGICAL GRID BACKGROUND
+            this.add.grid(window.innerWidth/2, window.innerHeight/2, window.innerWidth*2, window.innerHeight*2, 60, 60, 0x000000, 0, 0x3e4a59, 0.3);
+
+            // 3. GENERATE TEXTURES
+            const pGraphics = this.make.graphics().fillStyle(0xffffff).fillCircle(20, 20, 20);
             pGraphics.generateTexture('player', 40, 40);
+            const fGraphics = this.make.graphics().fillStyle(0xff3333).fillCircle(10, 10, 8);
+            fGraphics.generateTexture('food', 20, 20);
 
-            // Create Graphics for Food (Red Square)
-            const fGraphics = this.make.graphics().fillStyle(0xff0000).fillRect(0, 0, 15, 15);
-            fGraphics.generateTexture('food', 15, 15);
-
+            // 4. PLAYER WITH PHYSICS
             player = this.physics.add.sprite(window.innerWidth/2, window.innerHeight/2, 'player');
             player.setCollideWorldBounds(true);
+            player.setDamping(true);
+            player.setDrag(0.1); // This makes the "gliding" effect
+            player.setMaxVelocity(400);
 
+            // 5. FOOD GROUP
             food = this.physics.add.group();
-            for(let i = 0; i < 20; i++) {
-                spawnFood(food);
-            }
+            for(let i = 0; i < 25; i++) { spawnFood(food); }
 
-            levelText = this.add.text(20, 20, 'Level: 1 (Bacteria)', { fontSize: '24px', fill: '#fff' });
-            
+            // 6. UI
+            levelText = this.add.text(25, 25, '', { fontSize: '24px', fontStyle: 'bold', fill: '#00ff00' });
+            updateEvolution(player, levelText, score);
+
+            // 7. INTERACTION
             this.physics.add.overlap(player, food, (p, f) => {
                 f.destroy();
                 score++;
+                localStorage.setItem('playerScore', score); // Saves progress to browser
                 spawnFood(food);
-                player.setScale(1 + (score * 0.05));
-                
-                let species = "Bacteria";
-                if(score > 10) species = "Multi-Cellular";
-                if(score > 50) species = "Small Fish";
-                
-                levelText.setText(`Level: ${score} (${species})`);
-            }, null, this);
+                updateEvolution(p, levelText, score);
+            });
 
             cursors = this.input.keyboard.createCursorKeys();
         }
 
+        function updateEvolution(p, txt, s) {
+            p.setScale(1 + (s * 0.04));
+            let species = "BACTERIA";
+            let color = 0x00ff00;
+
+            if(s > 10) { species = "AMOEBA"; color = 0x00ffff; }
+            if(s > 30) { species = "JELLYFISH"; color = 0xff00ff; }
+            if(s > 60) { species = "SMALL FISH"; color = 0xffa500; }
+            if(s > 100) { species = "APEX PREDATOR"; color = 0xff0000; }
+
+            txt.setText(`SPECIES: ${species} | LEVEL: ${s}`);
+            p.setTint(color);
+            txt.setFill('#' + color.toString(16).padStart(6, '0'));
+        }
+
         function spawnFood(group) {
-            const x = Math.random() * window.innerWidth;
-            const y = Math.random() * window.innerHeight;
-            group.create(x, y, 'food');
+            group.create(Phaser.Math.Between(50, window.innerWidth-50), Phaser.Math.Between(50, window.innerHeight-50), 'food');
         }
 
         function update() {
-            player.setVelocity(0);
-            if (cursors.left.isDown) player.setVelocityX(-300);
-            else if (cursors.right.isDown) player.setVelocityX(300);
-            if (cursors.up.isDown) player.setVelocityY(-300);
-            else if (cursors.down.isDown) player.setVelocityY(300);
+            const accel = 800; 
+            if (cursors.left.isDown) player.setAccelerationX(-accel);
+            else if (cursors.right.isDown) player.setAccelerationX(accel);
+            else player.setAccelerationX(0);
+
+            if (cursors.up.isDown) player.setAccelerationY(-accel);
+            else if (cursors.down.isDown) player.setAccelerationY(accel);
+            else player.setAccelerationY(0);
         }
 
         new Phaser.Game(config);
